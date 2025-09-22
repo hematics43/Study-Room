@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <title>Study Room</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
   <link href="https://cdn.quilljs.com/1.3.7/quill.snow.css" rel="stylesheet">
   <style>
     :root{--accent:#3b82f6;--bg:#f6f8fb;--card:#fff}
@@ -23,8 +23,13 @@
     .btn:hover{background:#2563eb}
     .composer{display:flex;gap:8px}
     footer{padding:12px;text-align:center;font-size:13px;color:#64748b}
-    .file-preview{margin-top:10px;max-height:150px;overflow:auto;border:1px solid #ddd;padding:6px;border-radius:6px;background:#fafafa}
-    .file-preview img{max-width:100%;border-radius:4px;margin-bottom:6px}
+    /* Modal for uploaded files */
+    .modal{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:1000}
+    .modal-content{background:#fff;max-width:600px;width:90%;max-height:80%;overflow:auto;padding:16px;border-radius:8px;position:relative}
+    .modal-content h3{margin-top:0}
+    .close-btn{position:absolute;top:8px;right:12px;font-size:20px;cursor:pointer}
+    .file-item{margin-bottom:10px}
+    .file-item img{max-width:100%;border-radius:4px}
     @media(max-width:880px){
       .wrap{grid-template-columns:1fr}
       #editor{height:220px}
@@ -60,8 +65,8 @@
         <div style="margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
           <input type="file" id="fileInput" />
           <button id="uploadBtn" class="btn">⬆ Upload</button>
+          <button id="filesBtn" class="btn">📂 Files</button>
         </div>
-        <div id="preview" class="file-preview" style="display:none"></div>
       </div>
     </div>
 
@@ -74,6 +79,15 @@
   </div>
 
   <footer>Built with Firebase Realtime Database + Firebase Storage + Quill</footer>
+
+  <!-- Modal for file manager -->
+  <div id="fileModal" class="modal">
+    <div class="modal-content">
+      <span id="closeModal" class="close-btn">&times;</span>
+      <h3>📂 Uploaded Files</h3>
+      <div id="fileList"></div>
+    </div>
+  </div>
 
   <!-- Firebase SDKs -->
   <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-app-compat.js"></script>
@@ -101,41 +115,25 @@
       theme: 'snow'
     });
 
-    // Restore local draft if exists
+    // Local auto-save
     const draft = localStorage.getItem("studyroom-draft");
-    if (draft) {
-      try { quill.setContents(JSON.parse(draft)); } catch(e){}
-    }
-
-    // Auto-save locally every change
+    if (draft) { try { quill.setContents(JSON.parse(draft)); } catch(e){} }
     quill.on("text-change", () => {
       localStorage.setItem("studyroom-draft", JSON.stringify(quill.getContents()));
     });
 
     // --- State ---
-    let joined = false;
-    let userId = null;
-    let userName = null;
-    let room = null;
-    let suppress = false;
+    let joined = false, userId = null, userName = null, room = null, suppress = false;
 
-    // --- Join ---
     document.getElementById("joinBtn").onclick = () => {
       if (joined) return;
       userName = document.getElementById("displayName").value.trim() || "Anonymous";
       room = document.getElementById("roomCode").value.trim();
-
       const qs = new URLSearchParams(location.search);
       if (!room) {
-        room = qs.get("room");
-        if (!room) {
-          room = "room-" + Math.random().toString(36).slice(2, 8);
-          history.replaceState(null, "", "?room=" + room);
-        }
-      } else {
+        room = qs.get("room") || "room-" + Math.random().toString(36).slice(2, 8);
         history.replaceState(null, "", "?room=" + room);
-      }
-
+      } else history.replaceState(null, "", "?room=" + room);
       document.getElementById("roomLabel").textContent = "Room: " + room;
       userId = Math.random().toString(36).slice(2,9);
       joinRoom();
@@ -143,52 +141,19 @@
 
     function joinRoom(){
       joined = true;
-
       // Presence
       const userRef = db.ref(`rooms/${room}/presence/${userId}`);
-      userRef.set(userName);
-      userRef.onDisconnect().remove();
+      userRef.set(userName); userRef.onDisconnect().remove();
       db.ref(`rooms/${room}/presence`).on("value", snap => {
-        const usersEl = document.getElementById("users");
-        usersEl.innerHTML = "";
-        snap.forEach(c => {
-          const div = document.createElement("div");
-          div.textContent = c.val();
-          usersEl.appendChild(div);
-        });
+        const usersEl = document.getElementById("users"); usersEl.innerHTML = "";
+        snap.forEach(c => { const d = document.createElement("div"); d.textContent = c.val(); usersEl.appendChild(d); });
       });
 
-      // Chat listen
-      db.ref(`rooms/${room}/chat`).limitToLast(50).on("child_added", snap => {
-        const m = snap.val();
-        addMessage(m.name, m.text, m.ts);
-      });
-
-      // Chat send
+      // Chat
+      db.ref(`rooms/${room}/chat`).limitToLast(50).on("child_added", snap => addMessage(snap.val().name, snap.val().text, snap.val().ts));
       document.getElementById("sendBtn").onclick = () => {
-        const txt = document.getElementById("chatInput").value.trim();
-        if (!txt) return;
-        db.ref(`rooms/${room}/chat`).push({ name:userName, text:txt, ts:Date.now() });
-        document.getElementById("chatInput").value = "";
-      };
-
-      // File preview
-      document.getElementById("fileInput").onchange = e => {
-        const file = e.target.files[0];
-        const previewEl = document.getElementById("preview");
-        previewEl.innerHTML = "";
-        if (file) {
-          if (file.type.startsWith("image/")) {
-            const img = document.createElement("img");
-            img.src = URL.createObjectURL(file);
-            previewEl.appendChild(img);
-          } else {
-            previewEl.textContent = "📄 " + file.name;
-          }
-          previewEl.style.display = "block";
-        } else {
-          previewEl.style.display = "none";
-        }
+        const txt = document.getElementById("chatInput").value.trim(); if (!txt) return;
+        db.ref(`rooms/${room}/chat`).push({ name:userName, text:txt, ts:Date.now() }); document.getElementById("chatInput").value = "";
       };
 
       // File upload
@@ -198,58 +163,41 @@
         const storageRef = storage.ref(`rooms/${room}/uploads/${Date.now()}_${file.name}`);
         await storageRef.put(file);
         const url = await storageRef.getDownloadURL();
-        db.ref(`rooms/${room}/chat`).push({
-          name:userName,
-          text:`📎 <a href="${url}" target="_blank">${file.name}</a>`,
-          ts:Date.now()
-        });
+        const fileData = { name:file.name, type:file.type, url:url, user:userName, ts:Date.now() };
+        db.ref(`rooms/${room}/files`).push(fileData);
+        db.ref(`rooms/${room}/chat`).push({ name:userName, text:`📎 <a href="${url}" target="_blank">${file.name}</a>`, ts:Date.now() });
         document.getElementById("fileInput").value = "";
-        document.getElementById("preview").style.display = "none";
+        alert("File uploaded!");
       };
 
+      // File modal
+      document.getElementById("filesBtn").onclick = () => { document.getElementById("fileModal").style.display = "flex"; };
+      document.getElementById("closeModal").onclick = () => { document.getElementById("fileModal").style.display = "none"; };
+      db.ref(`rooms/${room}/files`).on("child_added", snap => {
+        const f = snap.val();
+        const item = document.createElement("div"); item.className="file-item";
+        if (f.type && f.type.startsWith("image/")) item.innerHTML = `<div><strong>${f.name}</strong> by ${f.user}</div><img src="${f.url}"/>`;
+        else item.innerHTML = `<div><strong><a href="${f.url}" target="_blank">${f.name}</a></strong> by ${f.user}</div>`;
+        document.getElementById("fileList").appendChild(item);
+      });
+
       // Doc sync
-      const docRef = db.ref(`rooms/${room}/doc`);
-      const opsRef = db.ref(`rooms/${room}/ops`);
+      const docRef = db.ref(`rooms/${room}/doc`), opsRef = db.ref(`rooms/${room}/ops`);
+      docRef.once("value").then(snap => { if (snap.val()) quill.setContents(snap.val()); });
+      opsRef.on("child_added", snap => { const op = snap.val(); if (op && op.user !== userId){ suppress=true; quill.updateContents(op.delta); suppress=false; }});
+      quill.on("text-change", (delta, old, src) => { if(!joined||suppress||src!=="user")return; opsRef.push({delta:delta,user:userId}); docRef.set(quill.getContents()); });
 
-      docRef.once("value").then(snap => {
-        const val = snap.val();
-        if (val) quill.setContents(val);
-      });
-
-      opsRef.on("child_added", snap => {
-        const op = snap.val();
-        if (op && op.user !== userId) {
-          suppress = true;
-          quill.updateContents(op.delta);
-          suppress = false;
-        }
-      });
-
-      quill.on("text-change", (delta, old, source) => {
-        if (!joined || suppress || source !== "user") return;
-        opsRef.push({ delta: delta, user: userId });
-        docRef.set(quill.getContents());
-      });
-
-      // Save as file
+      // Save as text
       document.getElementById("saveBtn").onclick = () => {
-        const contents = quill.getText();
-        const blob = new Blob([contents], {type: "text/plain"});
-        const a = document.createElement("a");
-        a.href = URL.createObjectURL(blob);
-        a.download = `${room}_notes.txt`;
-        a.click();
+        const blob = new Blob([quill.getText()], {type:"text/plain"});
+        const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=`${room}_notes.txt`; a.click();
       };
     }
 
-    // Chat UI
     function addMessage(name, text, ts){
-      const div = document.createElement("div");
-      div.className = "msg";
-      div.innerHTML = `<div class="meta">${name} • ${new Date(ts).toLocaleTimeString()}</div><div>${text}</div>`;
-      const messagesEl = document.getElementById("messages");
-      messagesEl.appendChild(div);
-      messagesEl.scrollTop = messagesEl.scrollHeight;
+      const d=document.createElement("div"); d.className="msg";
+      d.innerHTML=`<div class="meta">${name} • ${new Date(ts).toLocaleTimeString()}</div><div>${text}</div>`;
+      const m=document.getElementById("messages"); m.appendChild(d); m.scrollTop=m.scrollHeight;
     }
   </script>
 </body>
