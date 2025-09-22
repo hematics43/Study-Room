@@ -2,275 +2,585 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Study Room</title>
+  <title>Study Room — Full</title>
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
   <link href="https://cdn.quilljs.com/1.3.7/quill.snow.css" rel="stylesheet">
+  <!-- jsPDF for PDF export -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <style>
-    :root{--accent:#3b82f6;--bg:#f6f8fb;--card:#fff}
-    body{margin:0;font-family:Segoe UI,Roboto,Arial;background:var(--bg);color:#111}
-    header{padding:14px 18px;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.08);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap}
-    header h1{margin:0;font-size:18px}
-    .wrap{display:grid;grid-template-columns:1fr 320px;gap:16px;padding:16px;max-width:1200px;margin:0 auto}
-    .card{background:var(--card);padding:12px;border-radius:8px;box-shadow:0 4px 10px rgba(0,0,0,.05)}
-    #editor{height:340px;background:#fff;border-radius:6px}
-    .messages{height:240px;overflow:auto;padding:6px;background:#fafbfc;border-radius:6px;margin-bottom:8px}
-    .msg{padding:6px 8px;border-radius:6px;margin-bottom:6px;background:#fff;word-break:break-word}
-    .meta{font-size:12px;color:#555;margin-bottom:2px}
-    .users div{padding:4px 0;border-bottom:1px solid #f0f0f0}
-    input,button{padding:8px;border-radius:6px;border:1px solid #d1d5db;font-size:14px}
-    input:focus{outline:none;border-color:var(--accent)}
-    .btn{background:var(--accent);color:#fff;border:none;cursor:pointer;transition:.2s}
-    .btn:hover{background:#2563eb}
-    .composer{display:flex;gap:8px}
-    footer{padding:12px;text-align:center;font-size:13px;color:#64748b}
-    @media(max-width:880px){.wrap{grid-template-columns:1fr}}
-    /* Popup */
-    #filePopup{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:1000}
-    #filePopup .inner{background:#fff;padding:20px;border-radius:8px;max-width:90%;max-height:80%;overflow:auto;position:relative}
-    #filePopup h3{margin-top:0}
-    #closePopup{position:absolute;top:10px;right:14px;cursor:pointer;color:#f00;font-size:18px}
-    .fileItem{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #eee}
-    .fileItem button{background:#ef4444;font-size:12px;padding:4px 8px}
+    :root{
+      --accent:#2563eb; --bg:#f6f8fb; --card:#fff; --text:#111;
+    }
+    [data-theme="dark"]{
+      --bg:#0b1220; --card:#0f1724; --text:#e6eef8; --accent:#60a5fa;
+    }
+    body{
+      margin:0;font-family:Inter,Segoe UI,Roboto,Arial;background:var(--bg);color:var(--text);
+      -webkit-font-smoothing:antialiased;
+    }
+    header{padding:12px 16px;background:var(--card);display:flex;align-items:center;gap:12px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+    header h1{margin:0;color:var(--accent);font-size:18px}
+    .controls{margin-left:auto;display:flex;gap:8px;align-items:center}
+    .wrap{display:grid;grid-template-columns:1fr 360px;gap:14px;padding:14px;max-width:1200px;margin:0 auto}
+    .card{background:var(--card);padding:12px;border-radius:10px;box-shadow:0 6px 20px rgba(2,6,23,0.04)}
+    #editor{height:320px;background:#fff;border-radius:6px;overflow:auto}
+    .chat{display:flex;flex-direction:column;gap:8px}
+    .messages{height:280px;overflow:auto;padding:8px;border-radius:8px;background:linear-gradient(180deg, rgba(255,255,255,0.02), transparent)}
+    .msg{padding:8px;border-radius:8px;background:var(--card);margin-bottom:8px;word-break:break-word;border:1px solid rgba(0,0,0,0.03)}
+    .meta{font-size:12px;color:gray;margin-bottom:6px}
+    .composer{display:flex;gap:8px;align-items:center}
+    input,button,select,textarea{padding:8px;border-radius:8px;border:1px solid rgba(16,24,40,0.06);font-size:14px;background:transparent;color:var(--text)}
+    .btn{background:var(--accent);color:white;border:none;cursor:pointer;padding:8px 10px;border-radius:8px}
+    .small{font-size:12px;color:gray}
+    .users{display:flex;flex-direction:column;gap:6px}
+    .userItem{display:flex;justify-content:space-between;align-items:center;padding:6px;border-radius:6px}
+    .pinned{padding:8px;border-radius:8px;background:rgba(37,99,235,0.06);margin-bottom:8px}
+    .filePopup{position:fixed;inset:0;background:rgba(0,0,0,0.6);display:none;align-items:center;justify-content:center;z-index:2000}
+    .filePopup .inner{background:var(--card);padding:16px;border-radius:10px;max-width:720px;width:92%;max-height:80%;overflow:auto}
+    .fileItem{display:flex;justify-content:space-between;align-items:center;padding:8px;border-bottom:1px solid rgba(0,0,0,0.04)}
+    .reactionBar{display:inline-flex;gap:6px;margin-top:6px}
+    .reactionBtn{cursor:pointer;padding:4px 8px;border-radius:999px;background:rgba(0,0,0,0.03)}
+    .typing{font-size:13px;color:gray;margin-top:6px}
+    .dmPopup{position:fixed;right:14px;bottom:14px;background:var(--card);padding:10px;border-radius:10px;box-shadow:0 10px 30px rgba(2,6,23,0.2);display:none;z-index:2001;width:320px}
+    .voiceBtn{background:linear-gradient(90deg,#ef4444,#f97316);padding:8px 10px;border-radius:8px;color:white;border:none}
+    @media(max-width:900px){.wrap{grid-template-columns:1fr} #editor{height:220px}.messages{height:200px}}
   </style>
 </head>
-<body>
+<body data-theme="">
   <header>
-    <h1>🔥 Study Room</h1>
-    <div id="roomLabel" style="font-size:14px;color:#444"></div>
+    <h1>Study Room — Full</h1>
+    <div class="controls">
+      <select id="statusSel" title="Set your status">
+        <option value="studying">Studying</option>
+        <option value="question">Has question ✋</option>
+        <option value="away">Away</option>
+      </select>
+      <button id="darkToggle" class="btn">Dark</button>
+      <button id="exportPdf" class="btn">Export PDF</button>
+    </div>
   </header>
 
   <div class="wrap">
     <div>
-      <div class="card" style="margin-bottom:14px">
+      <div class="card" style="margin-bottom:12px">
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <input id="displayName" placeholder="Your name" style="flex:1 1 180px" />
+          <input id="roomCode" placeholder="Room code (or leave blank)" style="flex:1 1 160px" />
+          <button id="joinBtn" class="btn">Join</button>
+          <button id="leaveBtn" class="btn" style="background:#ef4444">Leave</button>
+          <button id="copyBtn" class="btn">Copy Link</button>
+        </div>
+
+        <div style="margin-top:10px" class="pinned" id="pinnedArea" hidden>
+          <strong>Pinned:</strong> <span id="pinnedText"></span>
+          <button id="unpinBtn" style="float:right" class="btn" >Unpin</button>
+        </div>
+
         <div id="toolbar"></div>
         <div id="editor"></div>
-        <div style="display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap">
-          <input id="displayName" placeholder="Your name" style="flex:1 1 140px" />
-          <input id="roomCode" placeholder="Room code (or leave blank)" style="flex:1 1 140px" />
-          <button id="joinBtn" class="btn">Join Room</button>
-          <button id="leaveBtn" class="btn" style="background:#ef4444">Leave Room</button>
-          <button id="saveBtn" class="btn">💾 Save</button>
+
+        <div style="display:flex;gap:8px;margin-top:8px;align-items:center">
+          <button id="saveTxt" class="btn">💾 Save TXT</button>
+          <button id="savePdf" class="btn">📄 Save PDF</button>
+          <button id="pinBtn" class="btn" title="Pin selected message or selection">📌 Pin</button>
+          <button id="exportHtml" class="btn">HTML</button>
         </div>
       </div>
-      <div class="card">
-        <h3 style="margin-top:0">💬 Chat</h3>
-        <div id="messages" class="messages"></div>
-        <div class="composer">
-          <input id="chatInput" placeholder="Type a message..." style="flex:1" />
-          <button id="sendBtn" class="btn">Send</button>
+
+      <div class="card chat">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <h3 style="margin:0">Chat</h3>
+          <div class="small" id="typingIndicator"></div>
         </div>
-        <div style="margin-top:8px;display:flex;gap:8px;align-items:center">
-          <input type="file" id="fileInput" />
-          <button id="uploadBtn" class="btn">⬆ Upload</button>
-          <button id="viewFilesBtn" class="btn">📂 Files</button>
+
+        <div id="messages" class="messages"></div>
+
+        <div class="composer">
+          <input id="chatInput" placeholder="Type a message..." />
+          <button id="sendBtn" class="btn">Send</button>
+          <button id="voiceRec" class="voiceBtn">🎤 Record</button>
+          <input type="file" id="fileInput" style="display:none" />
+          <button id="uploadBtn" class="btn">Upload File</button>
+          <button id="filesBtn" class="btn">Files</button>
         </div>
       </div>
     </div>
 
     <div>
-      <div class="card">
-        <h3 style="margin-top:0">👥 People Online</h3>
+      <div class="card" style="margin-bottom:12px">
+        <h3 style="margin:0 0 8px 0">People</h3>
+        <div style="display:flex;gap:8px;margin-bottom:8px">
+          <button id="dmOpen" class="btn" style="flex:1">Open DM</button>
+          <button id="raiseHand" class="btn" style="flex:1">✋ Raise Hand</button>
+        </div>
         <div id="users" class="users"></div>
+      </div>
+
+      <div class="card">
+        <h3 style="margin:0 0 8px 0">Pinned / Files</h3>
+        <div style="display:flex;gap:8px;margin-bottom:8px">
+          <button id="openFilePopup" class="btn" style="flex:1">Manage Files</button>
+          <button id="clearDraft" class="btn" style="flex:1;background:#ef4444">Clear Draft</button>
+        </div>
+        <div class="small">Tip: click a user to DM them.</div>
       </div>
     </div>
   </div>
 
-  <footer>Built with Firebase Realtime Database + Storage + Quill</footer>
+  <footer style="text-align:center;padding:12px">Built with Firebase + Quill — enjoy 🎓</footer>
 
-  <!-- Popup for files -->
-  <div id="filePopup">
+  <!-- File manager popup -->
+  <div id="filePopup" class="filePopup">
     <div class="inner">
       <span id="closePopup">✖</span>
-      <h3>📂 Uploaded Files</h3>
+      <h3>Files & Management</h3>
       <div id="fileList"></div>
     </div>
   </div>
 
-  <!-- Firebase SDKs -->
+  <!-- DM popup -->
+  <div id="dmPopup" class="dmPopup">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+      <strong id="dmWith">DM</strong><button id="closeDm" class="btn">Close</button>
+    </div>
+    <div id="dmMessages" style="height:200px;overflow:auto;background:linear-gradient(180deg,#fff,#f7f7fb);padding:6px;border-radius:8px;margin-bottom:6px"></div>
+    <div style="display:flex;gap:6px">
+      <input id="dmInput" style="flex:1" placeholder="Message..." />
+      <button id="dmSend" class="btn">Send</button>
+    </div>
+  </div>
+
+  <!-- libs -->
   <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-database-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-storage-compat.js"></script>
   <script src="https://cdn.quilljs.com/1.3.7/quill.min.js"></script>
-  <script>
-    // --- 🔥 Firebase config ---
-    const firebaseConfig = {
-      apiKey: "AIzaSyBkJMs46haewzuH0LdwtvfMg2LZeRuE1mk",
-      authDomain: "studentroom-a1650.firebaseapp.com",
-      databaseURL: "https://studentroom-a1650-default-rtdb.asia-southeast1.firebasedatabase.app/",
-      projectId: "studentroom-a1650",
-      storageBucket: "studentroom-a1650.appspot.com",
-      messagingSenderId: "515724899947",
-      appId: "1:515724899947:web:e985abc877872a2506a32e"
-    };
-    firebase.initializeApp(firebaseConfig);
-    const db = firebase.database();
-    const storage = firebase.storage();
 
-    // --- Quill setup ---
-    const quill = new Quill('#editor', {
-      modules: { toolbar: [['bold','italic','underline'],[{list:'ordered'},{list:'bullet'}],['link']] },
-      theme: 'snow'
+  <script>
+  (async ()=>{
+
+  // --- firebase config (your existing project) ---
+  const firebaseConfig = {
+    apiKey: "AIzaSyBkJMs46haewzuH0LdwtvfMg2LZeRuE1mk",
+    authDomain: "studentroom-a1650.firebaseapp.com",
+    databaseURL: "https://studentroom-a1650-default-rtdb.asia-southeast1.firebasedatabase.app/",
+    projectId: "studentroom-a1650",
+    storageBucket: "studentroom-a1650.appspot.com",
+    messagingSenderId: "515724899947",
+    appId: "1:515724899947:web:e985abc877872a2506a32e"
+  };
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.database(), storage = firebase.storage();
+
+  // quill
+  const quill = new Quill('#editor',{modules:{toolbar:[['bold','italic','underline'],[{list:'ordered'},{list:'bullet'}],['link']]},theme:'snow'});
+
+  // state
+  let joined=false, userId=null, userName=null, room=null, suppress=false;
+  let typingTimer=null;
+  const reactions = ['👍','❤️','😂','😮','👏'];
+
+  // restore draft
+  const draft = localStorage.getItem('studyroom-draft');
+  if(draft) try{ quill.setContents(JSON.parse(draft)); }catch(e){}
+  quill.on('text-change', ()=> localStorage.setItem('studyroom-draft', JSON.stringify(quill.getContents())) );
+
+  // restore session
+  const saved = JSON.parse(localStorage.getItem('studyroom-session')||'null');
+  if(saved){ userName=saved.userName; userId=saved.userId; room=saved.room; document.getElementById('displayName').value=userName; document.getElementById('roomCode').value=room; document.getElementById('roomLabel').textContent='Room: '+room; joinRoom(); }
+
+  // UI helpers
+  const el = id=>document.getElementById(id);
+  const now = ()=>Date.now();
+
+  // dark toggle
+  el('darkToggle').onclick = ()=>{
+    const theme = document.body.getAttribute('data-theme') === 'dark' ? '' : 'dark';
+    document.body.setAttribute('data-theme', theme);
+    localStorage.setItem('studyroom-theme', theme);
+  };
+  const savedTheme = localStorage.getItem('studyroom-theme');
+  if(savedTheme) document.body.setAttribute('data-theme', savedTheme);
+
+  // join logic
+  el('joinBtn').onclick = ()=>{
+    if(joined) return;
+    userName = (el('displayName').value||'Anonymous').trim();
+    room = (el('roomCode').value||'').trim();
+    const qs = new URLSearchParams(location.search);
+    if(!room){
+      room = qs.get('room') || 'room-'+Math.random().toString(36).slice(2,8);
+      history.replaceState(null,'','?room='+room);
+    } else history.replaceState(null,'','?room='+room);
+    userId = Math.random().toString(36).slice(2,9);
+    localStorage.setItem('studyroom-session', JSON.stringify({room, userName, userId}));
+    el('roomLabel').textContent = 'Room: '+room;
+    joinRoom();
+  };
+
+  el('copyBtn').onclick=()=>{ navigator.clipboard.writeText(location.href); alert('Link copied'); };
+
+  el('leaveBtn').onclick=()=>{ localStorage.removeItem('studyroom-session'); location.reload(); };
+
+  // typing indicator: send to DB under rooms/{room}/typing/{userId}: name:true, remove on stop
+  function setTyping(on){
+    if(!joined) return;
+    db.ref(`rooms/${room}/typing/${userId}`).set(on?userName:null);
+    if(on){
+      if(typingTimer) clearTimeout(typingTimer);
+      typingTimer = setTimeout(()=> setTyping(false), 2000);
+    }
+  }
+
+  el('chatInput').addEventListener('input', ()=> setTyping(true));
+
+  // DM popup open via click on user
+  el('dmOpen').onclick = ()=> el('dmPopup').style.display = 'flex';
+  el('closeDm').onclick = ()=> el('dmPopup').style.display = 'none';
+
+  // voice recording
+  let mediaRecorder=null, chunks=[];
+  el('voiceRec').onclick = async ()=>{
+    if(el('voiceRec').dataset.recording==='1'){
+      // stop
+      mediaRecorder.stop();
+      el('voiceRec').dataset.recording='0';
+      el('voiceRec').textContent='🎤 Record';
+      return;
+    }
+    // start
+    if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { alert('No microphone support'); return; }
+    try{
+      const stream = await navigator.mediaDevices.getUserMedia({audio:true});
+      mediaRecorder = new MediaRecorder(stream);
+      chunks=[];
+      mediaRecorder.ondataavailable = e => chunks.push(e.data);
+      mediaRecorder.onstop = async ()=>{
+        const blob = new Blob(chunks,{type:'audio/webm'});
+        // upload to storage
+        const ref = storage.ref(`rooms/${room}/voice/${now()}_${userId}.webm`);
+        await ref.put(blob);
+        const url = await ref.getDownloadURL();
+        // announce in chat
+        db.ref(`rooms/${room}/chat`).push({ name:userName, text:`🔊 <a href="${url}" target="_blank">Voice note</a>`, ts: now() });
+      };
+      mediaRecorder.start();
+      el('voiceRec').dataset.recording='1';
+      el('voiceRec').textContent='⏺️ Stop';
+    }catch(err){
+      alert('Microphone access denied');
+    }
+  };
+
+  // file upload trigger
+  el('uploadBtn').onclick = ()=> el('fileInput').click();
+  el('fileInput').addEventListener('change', async (e)=>{
+    if(!joined) return alert('Join first');
+    const file = e.target.files[0]; if(!file) return;
+    const key = `${now()}_${file.name}`;
+    const ref = storage.ref(`rooms/${room}/uploads/${key}`);
+    await ref.put(file);
+    const url = await ref.getDownloadURL();
+    const fileData = { name:file.name, url, by:userName, uid:userId, type:file.type, ts: now() };
+    db.ref(`rooms/${room}/files`).push(fileData);
+    db.ref(`rooms/${room}/chat`).push({ name:userName, text:`📎 <a href="${url}" target="_blank">${file.name}</a>`, ts: now() });
+    el('fileInput').value='';
+  });
+
+  // view files popup
+  el('filesBtn').onclick = ()=> el('filePopup').style.display='flex';
+  el('closePopup').onclick = ()=> el('filePopup').style.display='none';
+  el('openFilePopup').onclick = ()=> el('filePopup').style.display='flex';
+
+  // clear draft
+  el('clearDraft').onclick = ()=> { if(confirm('Clear local draft?')){ localStorage.removeItem('studyroom-draft'); quill.setContents([{insert:'\n'}]); }};
+
+  // export PDF / TXT / HTML
+  el('saveTxt').onclick = ()=>{
+    const text = quill.getText();
+    const blob = new Blob([text], {type:'text/plain'});
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${room||'notes'}_notes.txt`; a.click();
+  };
+  el('savePdf').onclick = async ()=>{
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    const text = quill.getText();
+    const lines = doc.splitTextToSize(text, 180);
+    doc.setFontSize(12);
+    doc.text(lines, 10, 10);
+    doc.save(`${room||'notes'}_notes.pdf`);
+  };
+  el('exportPdf').onclick = ()=> el('savePdf').click();
+  el('exportHtml').onclick = ()=>{
+    const html = quill.root.innerHTML;
+    const blob = new Blob([html], {type:'text/html'});
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${room||'notes'}_notes.html`; a.click();
+  };
+
+  // pin/unpin
+  el('pinBtn').onclick = ()=>{
+    if(!joined) return alert('Join first');
+    // pin current selection or editor text if none
+    const sel = quill.getSelection();
+    const pinnedText = sel ? quill.getText(sel.index, sel.length) : quill.getText();
+    db.ref(`rooms/${room}/pinned`).set({ text: pinnedText, by:userName, ts: now() });
+  };
+  el('unpinBtn').onclick = ()=> db.ref(`rooms/${room}/pinned`).remove();
+
+  // typing indicator listener
+  function listenTyping(){
+    db.ref(`rooms/${room}/typing`).on('value', snap=>{
+      const users = [];
+      snap.forEach(c=> { if(c.val()) users.push(c.val()); });
+      el('typingIndicator').textContent = users.length ? users.join(', ') + (users.length===1? ' is typing...':' are typing...') : '';
+    });
+  }
+
+  // add chat message UI with reactions, DM, etc.
+  function renderMessage(key, m){
+    const div = document.createElement('div'); div.className='msg'; div.dataset.key=key;
+    const meta = document.createElement('div'); meta.className='meta'; meta.innerHTML = `<strong>${m.name}</strong> • ${new Date(m.ts||now()).toLocaleTimeString()}`;
+    const body = document.createElement('div'); body.innerHTML = m.text;
+    // reactions bar
+    const rbar = document.createElement('div'); rbar.className='reactionBar';
+    reactions.forEach(emoji=>{
+      const btn = document.createElement('span'); btn.className='reactionBtn'; btn.textContent=emoji;
+      btn.onclick = ()=> toggleReaction(key, emoji);
+      rbar.appendChild(btn);
+    });
+    // show existing reactions
+    const reactionsView = document.createElement('div'); reactionsView.style.marginTop='6px';
+    reactionsView.id = 'reac-'+key;
+    div.appendChild(meta); div.appendChild(body); div.appendChild(rbar); div.appendChild(reactionsView);
+
+    // right-click / long-press to DM or copy link
+    meta.addEventListener('click', ()=> openDMWith(m.name, m.uid || null));
+
+    return div;
+  }
+
+  function addMessageToDOM(key, m){
+    const messages = el('messages');
+    const node = renderMessage(key, m);
+    // fetch reactions snapshot
+    db.ref(`rooms/${room}/reactions/${key}`).once('value').then(snap=>{
+      updateReactionsView(key, snap.val());
+    });
+    messages.appendChild(node);
+    messages.scrollTop = messages.scrollHeight;
+  }
+
+  // toggle reaction
+  async function toggleReaction(msgKey, emoji){
+    const ref = db.ref(`rooms/${room}/reactions/${msgKey}/${emoji}/${userId}`);
+    const cur = (await ref.once('value')).val();
+    if(cur) ref.remove();
+    else ref.set(true);
+  }
+
+  function updateReactionsView(msgKey, obj){
+    const container = el('reac-'+msgKey);
+    if(!container) return;
+    container.innerHTML = '';
+    if(!obj) return;
+    Object.keys(obj).forEach(emoji=>{
+      const users = Object.keys(obj[emoji]||{});
+      const span = document.createElement('span'); span.textContent = `${emoji} ${users.length}`; span.style.marginRight='8px';
+      container.appendChild(span);
+    });
+  }
+
+  // listen chat / reactions realtime
+  function listenChat(){
+    const chatRef = db.ref(`rooms/${room}/chat`);
+    chatRef.off();
+    el('messages').innerHTML = '';
+    chatRef.limitToLast(200).on('child_added', snap => {
+      addMessageToDOM(snap.key, snap.val());
+    });
+    // reactions updates
+    db.ref(`rooms/${room}/reactions`).on('value', snap=>{
+      snap.forEach(msgSnap=> updateReactionsView(msgSnap.key, msgSnap.val()));
+    });
+  }
+
+  // listen pinned
+  function listenPinned(){
+    db.ref(`rooms/${room}/pinned`).on('value', snap=>{
+      const p = snap.val();
+      if(p){
+        el('pinnedArea').hidden=false;
+        el('pinnedText').textContent = p.text + ' • by ' + p.by;
+      } else el('pinnedArea').hidden=true;
+    });
+  }
+
+  // listen files list realtime
+  function listenFiles(){
+    db.ref(`rooms/${room}/files`).on('value', snap=>{
+      const list = el('fileList'); list.innerHTML='';
+      snap.forEach(child=>{
+        const f = child.val(); const key = child.key;
+        const item = document.createElement('div'); item.className='fileItem';
+        item.innerHTML = `<div><a href="${f.url}" target="_blank">${f.name}</a> <div class="small">by ${f.by}</div></div>`;
+        // delete button only for uploader
+        if(f.uid === userId){
+          const b = document.createElement('button'); b.textContent='Delete';
+          b.onclick = async ()=>{
+            if(!confirm('Delete file?')) return;
+            // remove storage object and db entry
+            try{ await storage.refFromURL(f.url).delete(); }catch(e){}
+            db.ref(`rooms/${room}/files/${key}`).remove();
+          };
+          item.appendChild(b);
+        }
+        list.appendChild(item);
+      });
+    });
+  }
+
+  // presence & status
+  function listenPresence(){
+    db.ref(`rooms/${room}/presence`).on('value', snap=>{
+      const users = el('users'); users.innerHTML='';
+      snap.forEach(c=>{
+        const uid = c.key; const name = c.val();
+        const d = document.createElement('div'); d.className='userItem';
+        d.innerHTML = `<div>${name}</div><div><button class="btn small" data-uid="${uid}" data-name="${name}">DM</button></div>`;
+        d.querySelector('button').onclick = (ev)=> openDMWith(ev.target.dataset.name, ev.target.dataset.uid);
+        users.appendChild(d);
+      });
+    });
+  }
+
+  // typing indicator listener
+  function listenTypingIndicator(){
+    db.ref(`rooms/${room}/typing`).on('value', snap=>{
+      const names=[];
+      snap.forEach(c=> { if(c.val()) names.push(c.val()); });
+      const txt = names.length ? (names.join(', ')+ (names.length===1? ' is typing...':' are typing...')) : '';
+      el('typingIndicator').textContent = txt;
+    });
+  }
+
+  // statuses
+  el('statusSel').onchange = ()=> {
+    if(!joined) return;
+    db.ref(`rooms/${room}/status/${userId}`).set({name:userName,status:el('statusSel').value, ts: now()});
+  };
+  function listenStatus(){
+    db.ref(`rooms/${room}/status`).on('value', snap=>{
+      // render near users list as small badges (we keep simple)
+      snap.forEach(c=>{
+        // optional: show status changes as small ephemeral message
+      });
+    });
+  }
+
+  // DM functions (basic)
+  let dmTarget = null;
+  function openDMWith(name, uid){
+    dmTarget = uid;
+    el('dmWith').textContent = 'DM with ' + (name || 'unknown');
+    el('dmPopup').style.display = 'block';
+    // listen messages between userId and uid in path rooms/{room}/dms/{sortedKey}
+    if(!uid) return;
+    const pairKey = [userId, uid].sort().join('_');
+    const ref = db.ref(`rooms/${room}/dms/${pairKey}`);
+    el('dmMessages').innerHTML = '';
+    ref.limitToLast(200).on('child_added', snap=>{
+      const m = snap.val();
+      const div = document.createElement('div');
+      div.innerHTML = `<div class="meta">${m.fromName} • ${new Date(m.ts).toLocaleTimeString()}</div><div>${m.text}</div>`;
+      el('dmMessages').appendChild(div);
+    });
+    el('dmSend').onclick = ()=>{
+      const t = el('dmInput').value.trim(); if(!t) return;
+      ref.push({ from:userId, fromName:userName, to:uid, text:t, ts:now() });
+      el('dmInput').value='';
+    };
+  }
+
+  // toggle reaction updates (updateReactionsView handles UI)
+  // subscribe to changes on message collection already done in listenChat
+
+  // joinRoom routine
+  function joinRoom(){
+    if(joined) return;
+    joined = true;
+    // save session
+    localStorage.setItem('studyroom-session', JSON.stringify({room, userName, userId}));
+    // presence
+    db.ref(`rooms/${room}/presence/${userId}`).set(userName);
+    db.ref(`rooms/${room}/presence/${userId}`).onDisconnect().remove();
+    listenPresence();
+    // status
+    db.ref(`rooms/${room}/status/${userId}`).set({name:userName,status:el('statusSel').value||'studying', ts:now()});
+    db.ref(`rooms/${room}/status/${userId}`).onDisconnect().remove();
+    listenStatus();
+    // typing
+    listenTypingIndicator();
+    // chat & reactions
+    listenChat();
+    // pinned
+    listenPinned();
+    // files
+    listenFiles();
+    // file list realtime handled
+    // doc sync (delta ops)
+    const docRef = db.ref(`rooms/${room}/doc`);
+    const opsRef = db.ref(`rooms/${room}/ops`);
+    docRef.once('value').then(snap=>{ if(snap.val()) quill.setContents(snap.val()); });
+    opsRef.on('child_added', snap=>{
+      const op = snap.val(); if(op && op.user !== userId){ suppress=true; quill.updateContents(op.delta); suppress=false; }
+    });
+    quill.on('text-change', (delta, old, source)=>{
+      if(!joined || suppress || source !== 'user') return;
+      opsRef.push({delta, user:userId, ts:now()});
+      docRef.set(quill.getContents());
     });
 
-    // --- State ---
-    let joined = false, userId=null, userName=null, room=null, suppress=false;
-
-    // Restore previous session
-    const savedSession = JSON.parse(localStorage.getItem("studyroom-session") || "null");
-    if (savedSession) {
-      userName = savedSession.userName;
-      userId = savedSession.userId;
-      room = savedSession.room;
-      document.getElementById("displayName").value = userName;
-      document.getElementById("roomCode").value = room;
-      document.getElementById("roomLabel").textContent = "Room: " + room;
-      joinRoom();
-    }
-
-    // --- Join ---
-    document.getElementById("joinBtn").onclick = () => {
-      if (joined) return;
-      userName = document.getElementById("displayName").value.trim() || "Anonymous";
-      room = document.getElementById("roomCode").value.trim();
-      const qs = new URLSearchParams(location.search);
-      if (!room) {
-        room = qs.get("room") || "room-" + Math.random().toString(36).slice(2, 8);
-        history.replaceState(null, "", "?room=" + room);
-      } else {
-        history.replaceState(null, "", "?room=" + room);
-      }
-      userId = Math.random().toString(36).slice(2,9);
-      document.getElementById("roomLabel").textContent = "Room: " + room;
-      localStorage.setItem("studyroom-session", JSON.stringify({ room, userName, userId }));
-      joinRoom();
+    // chat send
+    el('sendBtn').onclick = ()=> {
+      const t=el('chatInput').value.trim(); if(!t) return;
+      const msg = { name:userName, uid:userId, text:t, ts:now() };
+      db.ref(`rooms/${room}/chat`).push(msg);
+      el('chatInput').value='';
     };
 
-    // --- Leave Room ---
-    document.getElementById("leaveBtn").onclick = () => {
-      localStorage.removeItem("studyroom-session");
-      location.reload();
-    };
+    // typing signals (already set on input)
+    el('chatInput').addEventListener('input', ()=>{
+      db.ref(`rooms/${room}/typing/${userId}`).set(userName);
+      // clear after 2s
+      if(typingTimer) clearTimeout(typingTimer);
+      typingTimer = setTimeout(()=> db.ref(`rooms/${room}/typing/${userId}`).set(null), 2000);
+    });
 
-    function joinRoom(){
-      joined = true;
+    // subscribe to reactions per message handled by listenChat which watches 'reactions' branch
 
-      // Presence
-      const userRef = db.ref(`rooms/${room}/presence/${userId}`);
-      userRef.set(userName);
-      userRef.onDisconnect().remove();
-      db.ref(`rooms/${room}/presence`).on("value", snap => {
-        const usersEl = document.getElementById("users");
-        usersEl.innerHTML = "";
-        snap.forEach(c => {
-          const d = document.createElement("div");
-          d.textContent = c.val();
-          usersEl.appendChild(d);
-        });
-      });
+    // set status initially
+    db.ref(`rooms/${room}/status/${userId}`).set({name:userName,status:el('statusSel').value||'studying', ts:now()});
+  }
 
-      // Chat listen
-      db.ref(`rooms/${room}/chat`).limitToLast(50).on("child_added", snap => {
-        const m = snap.val();
-        addMessage(m.name, m.text, m.ts);
-      });
+  // listen to chat reactions and messages in listenChat
 
-      // Send chat
-      document.getElementById("sendBtn").onclick = () => {
-        const txt = document.getElementById("chatInput").value.trim();
-        if (!txt) return;
-        db.ref(`rooms/${room}/chat`).push({ name:userName, text:txt, ts:Date.now() });
-        document.getElementById("chatInput").value = "";
-      };
+  // when someone types join before loaded messages, ensure UI events
+  // attach listener for reactions updates to updateReactionsView (done in listenChat)
 
-      // File upload
-      document.getElementById("uploadBtn").onclick = async () => {
-        const file = document.getElementById("fileInput").files[0];
-        if (!file) return alert("Choose a file first.");
-        const storageRef = storage.ref(`rooms/${room}/uploads/${Date.now()}_${file.name}`);
-        await storageRef.put(file);
-        const url = await storageRef.getDownloadURL();
-        const fileData = { name:file.name, url, by:userName, uid:userId, ts:Date.now() };
-        db.ref(`rooms/${room}/files`).push(fileData);
-        db.ref(`rooms/${room}/chat`).push({
-          name:userName, text:`📎 <a href="${url}" target="_blank">${file.name}</a>`, ts:Date.now()
-        });
-        document.getElementById("fileInput").value = "";
-      };
+  // final: when page unload, keep presence until disconnect handled by onDisconnect, but optionally clear typing
+  window.addEventListener('beforeunload', ()=> {
+    if(joined) db.ref(`rooms/${room}/typing/${userId}`).remove();
+  });
 
-      // Show files popup
-      document.getElementById("viewFilesBtn").onclick = () => {
-        document.getElementById("filePopup").style.display = "flex";
-      };
-      document.getElementById("closePopup").onclick = () => {
-        document.getElementById("filePopup").style.display = "none";
-      };
+  // listen for reaction changes (global)
+  // already wired in listenChat to call updateReactionsView when 'reactions' value changes
 
-      // File list with delete
-      db.ref(`rooms/${room}/files`).on("value", snap => {
-        const fileList = document.getElementById("fileList");
-        fileList.innerHTML = "";
-        snap.forEach(c => {
-          const f = c.val();
-          const key = c.key;
-          const div = document.createElement("div");
-          div.className = "fileItem";
-          div.innerHTML = `📎 <a href="${f.url}" target="_blank">${f.name}</a> <small>(${f.by})</small>`;
-          // Allow delete if file was uploaded by this user
-          if (f.uid === userId) {
-            const delBtn = document.createElement("button");
-            delBtn.textContent = "Delete";
-            delBtn.onclick = async () => {
-              if (!confirm("Delete this file?")) return;
-              await storage.refFromURL(f.url).delete().catch(()=>{});
-              db.ref(`rooms/${room}/files/${key}`).remove();
-            };
-            div.appendChild(delBtn);
-          }
-          fileList.appendChild(div);
-        });
-      });
+  // react to pinned changes displayed via listenPinned
 
-      // Doc sync
-      const docRef = db.ref(`rooms/${room}/doc`);
-      const opsRef = db.ref(`rooms/${room}/ops`);
-      docRef.once("value").then(snap => {
-        const val = snap.val();
-        if (val) quill.setContents(val);
-      });
-      opsRef.on("child_added", snap => {
-        const op = snap.val();
-        if (op && op.user !== userId) {
-          suppress = true;
-          quill.updateContents(op.delta);
-          suppress = false;
-        }
-      });
-      quill.on("text-change", (delta, old, source) => {
-        if (!joined || suppress || source !== "user") return;
-        opsRef.push({ delta, user:userId });
-        docRef.set(quill.getContents());
-      });
+  // small helper to show existing reactions when reading new messages: we already call updateReactionsView in addMessageToDOM
 
-      // Save local
-      document.getElementById("saveBtn").onclick = () => {
-        const contents = quill.getText();
-        const blob = new Blob([contents], {type:"text/plain"});
-        const a = document.createElement("a");
-        a.href = URL.createObjectURL(blob);
-        a.download = `${room}_notes.txt`;
-        a.click();
-      };
-    }
-
-    // Chat UI
-    function addMessage(name, text, ts){
-      const div = document.createElement("div");
-      div.className = "msg";
-      div.innerHTML = `<div class="meta">${name} • ${new Date(ts).toLocaleTimeString()}</div><div>${text}</div>`;
-      const messagesEl = document.getElementById("messages");
-      messagesEl.appendChild(div);
-      messagesEl.scrollTop = messagesEl.scrollHeight;
-    }
+  // Done
+  })();
   </script>
 </body>
 </html>
