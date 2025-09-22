@@ -7,12 +7,12 @@
   <link href="https://cdn.quilljs.com/1.3.7/quill.snow.css" rel="stylesheet">
   <style>
     :root{--accent:#3b82f6;--bg:#f6f8fb;--card:#fff}
-    body{margin:0;font-family:Segoe UI,Roboto,Arial,sans-serif;background:var(--bg);color:#111}
+    body{margin:0;font-family:Segoe UI,Roboto,Arial;background:var(--bg);color:#111}
     header{padding:14px 18px;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.08);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap}
     header h1{margin:0;font-size:18px}
     .wrap{display:grid;grid-template-columns:1fr 320px;gap:16px;padding:16px;max-width:1200px;margin:0 auto}
     .card{background:var(--card);padding:12px;border-radius:8px;box-shadow:0 4px 10px rgba(0,0,0,.05)}
-    #editor{height:300px;background:#fff;border-radius:6px}
+    #editor{height:340px;background:#fff;border-radius:6px}
     .messages{height:240px;overflow:auto;padding:6px;background:#fafbfc;border-radius:6px;margin-bottom:8px}
     .msg{padding:6px 8px;border-radius:6px;margin-bottom:6px;background:#fff;word-break:break-word}
     .meta{font-size:12px;color:#555;margin-bottom:2px}
@@ -23,18 +23,12 @@
     .btn:hover{background:#2563eb}
     .composer{display:flex;gap:8px}
     footer{padding:12px;text-align:center;font-size:13px;color:#64748b}
-    /* Modal for uploaded files */
-    .modal{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:1000}
-    .modal-content{background:#fff;max-width:600px;width:90%;max-height:80%;overflow:auto;padding:16px;border-radius:8px;position:relative}
-    .modal-content h3{margin-top:0}
-    .close-btn{position:absolute;top:8px;right:12px;font-size:20px;cursor:pointer}
-    .file-item{margin-bottom:10px}
-    .file-item img{max-width:100%;border-radius:4px}
-    @media(max-width:880px){
-      .wrap{grid-template-columns:1fr}
-      #editor{height:220px}
-      .messages{height:180px}
-    }
+    @media(max-width:880px){.wrap{grid-template-columns:1fr}}
+    /* Popup */
+    #filePopup{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center}
+    #filePopup .inner{background:#fff;padding:20px;border-radius:8px;max-width:90%;max-height:80%;overflow:auto}
+    #filePopup h3{margin-top:0}
+    #closePopup{float:right;cursor:pointer;color:#f00}
   </style>
 </head>
 <body>
@@ -49,9 +43,10 @@
         <div id="toolbar"></div>
         <div id="editor"></div>
         <div style="display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap">
-          <input id="displayName" placeholder="Your name" style="flex:1 1 120px" />
-          <input id="roomCode" placeholder="Room code (or leave blank)" style="flex:1 1 120px" />
+          <input id="displayName" placeholder="Your name" style="flex:1 1 140px" />
+          <input id="roomCode" placeholder="Room code (or leave blank)" style="flex:1 1 140px" />
           <button id="joinBtn" class="btn">Join Room</button>
+          <button id="leaveBtn" class="btn" style="background:#ef4444">Leave Room</button>
           <button id="saveBtn" class="btn">💾 Save</button>
         </div>
       </div>
@@ -62,10 +57,10 @@
           <input id="chatInput" placeholder="Type a message..." style="flex:1" />
           <button id="sendBtn" class="btn">Send</button>
         </div>
-        <div style="margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <div style="margin-top:8px;display:flex;gap:8px;align-items:center">
           <input type="file" id="fileInput" />
           <button id="uploadBtn" class="btn">⬆ Upload</button>
-          <button id="filesBtn" class="btn">📂 Files</button>
+          <button id="viewFilesBtn" class="btn">📂 Files</button>
         </div>
       </div>
     </div>
@@ -78,12 +73,12 @@
     </div>
   </div>
 
-  <footer>Built with Firebase Realtime Database + Firebase Storage + Quill</footer>
+  <footer>Built with Firebase Realtime Database + Storage + Quill</footer>
 
-  <!-- Modal for file manager -->
-  <div id="fileModal" class="modal">
-    <div class="modal-content">
-      <span id="closeModal" class="close-btn">&times;</span>
+  <!-- Popup for files -->
+  <div id="filePopup">
+    <div class="inner">
+      <span id="closePopup">✖</span>
       <h3>📂 Uploaded Files</h3>
       <div id="fileList"></div>
     </div>
@@ -115,16 +110,22 @@
       theme: 'snow'
     });
 
-    // Local auto-save
-    const draft = localStorage.getItem("studyroom-draft");
-    if (draft) { try { quill.setContents(JSON.parse(draft)); } catch(e){} }
-    quill.on("text-change", () => {
-      localStorage.setItem("studyroom-draft", JSON.stringify(quill.getContents()));
-    });
-
     // --- State ---
-    let joined = false, userId = null, userName = null, room = null, suppress = false;
+    let joined = false, userId=null, userName=null, room=null, suppress=false;
 
+    // Restore previous session
+    const savedSession = JSON.parse(localStorage.getItem("studyroom-session") || "null");
+    if (savedSession) {
+      userName = savedSession.userName;
+      userId = savedSession.userId;
+      room = savedSession.room;
+      document.getElementById("displayName").value = userName;
+      document.getElementById("roomCode").value = room;
+      document.getElementById("roomLabel").textContent = "Room: " + room;
+      joinRoom();
+    }
+
+    // --- Join ---
     document.getElementById("joinBtn").onclick = () => {
       if (joined) return;
       userName = document.getElementById("displayName").value.trim() || "Anonymous";
@@ -133,27 +134,50 @@
       if (!room) {
         room = qs.get("room") || "room-" + Math.random().toString(36).slice(2, 8);
         history.replaceState(null, "", "?room=" + room);
-      } else history.replaceState(null, "", "?room=" + room);
-      document.getElementById("roomLabel").textContent = "Room: " + room;
+      } else {
+        history.replaceState(null, "", "?room=" + room);
+      }
       userId = Math.random().toString(36).slice(2,9);
+      document.getElementById("roomLabel").textContent = "Room: " + room;
+      localStorage.setItem("studyroom-session", JSON.stringify({ room, userName, userId }));
       joinRoom();
+    };
+
+    // --- Leave Room ---
+    document.getElementById("leaveBtn").onclick = () => {
+      localStorage.removeItem("studyroom-session");
+      location.reload();
     };
 
     function joinRoom(){
       joined = true;
+
       // Presence
       const userRef = db.ref(`rooms/${room}/presence/${userId}`);
-      userRef.set(userName); userRef.onDisconnect().remove();
+      userRef.set(userName);
+      userRef.onDisconnect().remove();
       db.ref(`rooms/${room}/presence`).on("value", snap => {
-        const usersEl = document.getElementById("users"); usersEl.innerHTML = "";
-        snap.forEach(c => { const d = document.createElement("div"); d.textContent = c.val(); usersEl.appendChild(d); });
+        const usersEl = document.getElementById("users");
+        usersEl.innerHTML = "";
+        snap.forEach(c => {
+          const d = document.createElement("div");
+          d.textContent = c.val();
+          usersEl.appendChild(d);
+        });
       });
 
-      // Chat
-      db.ref(`rooms/${room}/chat`).limitToLast(50).on("child_added", snap => addMessage(snap.val().name, snap.val().text, snap.val().ts));
+      // Chat listen
+      db.ref(`rooms/${room}/chat`).limitToLast(50).on("child_added", snap => {
+        const m = snap.val();
+        addMessage(m.name, m.text, m.ts);
+      });
+
+      // Send chat
       document.getElementById("sendBtn").onclick = () => {
-        const txt = document.getElementById("chatInput").value.trim(); if (!txt) return;
-        db.ref(`rooms/${room}/chat`).push({ name:userName, text:txt, ts:Date.now() }); document.getElementById("chatInput").value = "";
+        const txt = document.getElementById("chatInput").value.trim();
+        if (!txt) return;
+        db.ref(`rooms/${room}/chat`).push({ name:userName, text:txt, ts:Date.now() });
+        document.getElementById("chatInput").value = "";
       };
 
       // File upload
@@ -163,42 +187,74 @@
         const storageRef = storage.ref(`rooms/${room}/uploads/${Date.now()}_${file.name}`);
         await storageRef.put(file);
         const url = await storageRef.getDownloadURL();
-        const fileData = { name:file.name, type:file.type, url:url, user:userName, ts:Date.now() };
-        db.ref(`rooms/${room}/files`).push(fileData);
-        db.ref(`rooms/${room}/chat`).push({ name:userName, text:`📎 <a href="${url}" target="_blank">${file.name}</a>`, ts:Date.now() });
+        db.ref(`rooms/${room}/files`).push({ name:file.name, url, by:userName, ts:Date.now() });
+        db.ref(`rooms/${room}/chat`).push({
+          name:userName, text:`📎 <a href="${url}" target="_blank">${file.name}</a>`, ts:Date.now()
+        });
         document.getElementById("fileInput").value = "";
-        alert("File uploaded!");
       };
 
-      // File modal
-      document.getElementById("filesBtn").onclick = () => { document.getElementById("fileModal").style.display = "flex"; };
-      document.getElementById("closeModal").onclick = () => { document.getElementById("fileModal").style.display = "none"; };
-      db.ref(`rooms/${room}/files`).on("child_added", snap => {
-        const f = snap.val();
-        const item = document.createElement("div"); item.className="file-item";
-        if (f.type && f.type.startsWith("image/")) item.innerHTML = `<div><strong>${f.name}</strong> by ${f.user}</div><img src="${f.url}"/>`;
-        else item.innerHTML = `<div><strong><a href="${f.url}" target="_blank">${f.name}</a></strong> by ${f.user}</div>`;
-        document.getElementById("fileList").appendChild(item);
+      // Show files popup
+      document.getElementById("viewFilesBtn").onclick = () => {
+        document.getElementById("filePopup").style.display = "flex";
+      };
+      document.getElementById("closePopup").onclick = () => {
+        document.getElementById("filePopup").style.display = "none";
+      };
+
+      // File list
+      db.ref(`rooms/${room}/files`).on("value", snap => {
+        const fileList = document.getElementById("fileList");
+        fileList.innerHTML = "";
+        snap.forEach(c => {
+          const f = c.val();
+          const div = document.createElement("div");
+          div.innerHTML = `📎 <a href="${f.url}" target="_blank">${f.name}</a> <small>(${f.by})</small>`;
+          fileList.appendChild(div);
+        });
       });
 
       // Doc sync
-      const docRef = db.ref(`rooms/${room}/doc`), opsRef = db.ref(`rooms/${room}/ops`);
-      docRef.once("value").then(snap => { if (snap.val()) quill.setContents(snap.val()); });
-      opsRef.on("child_added", snap => { const op = snap.val(); if (op && op.user !== userId){ suppress=true; quill.updateContents(op.delta); suppress=false; }});
-      quill.on("text-change", (delta, old, src) => { if(!joined||suppress||src!=="user")return; opsRef.push({delta:delta,user:userId}); docRef.set(quill.getContents()); });
+      const docRef = db.ref(`rooms/${room}/doc`);
+      const opsRef = db.ref(`rooms/${room}/ops`);
+      docRef.once("value").then(snap => {
+        const val = snap.val();
+        if (val) quill.setContents(val);
+      });
+      opsRef.on("child_added", snap => {
+        const op = snap.val();
+        if (op && op.user !== userId) {
+          suppress = true;
+          quill.updateContents(op.delta);
+          suppress = false;
+        }
+      });
+      quill.on("text-change", (delta, old, source) => {
+        if (!joined || suppress || source !== "user") return;
+        opsRef.push({ delta, user:userId });
+        docRef.set(quill.getContents());
+      });
 
-      // Save as text
+      // Save local
       document.getElementById("saveBtn").onclick = () => {
-        const blob = new Blob([quill.getText()], {type:"text/plain"});
-        const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=`${room}_notes.txt`; a.click();
+        const contents = quill.getText();
+        const blob = new Blob([contents], {type:"text/plain"});
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = `${room}_notes.txt`;
+        a.click();
       };
     }
 
+    // Chat UI
     function addMessage(name, text, ts){
-      const d=document.createElement("div"); d.className="msg";
-      d.innerHTML=`<div class="meta">${name} • ${new Date(ts).toLocaleTimeString()}</div><div>${text}</div>`;
-      const m=document.getElementById("messages"); m.appendChild(d); m.scrollTop=m.scrollHeight;
+      const div = document.createElement("div");
+      div.className = "msg";
+      div.innerHTML = `<div class="meta">${name} • ${new Date(ts).toLocaleTimeString()}</div><div>${text}</div>`;
+      const messagesEl = document.getElementById("messages");
+      messagesEl.appendChild(div);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
     }
   </script>
 </body>
-</html>
+</html>Built with Firebase Realtime Database + Storage + Quill
