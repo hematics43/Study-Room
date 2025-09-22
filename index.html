@@ -25,10 +25,12 @@
     footer{padding:12px;text-align:center;font-size:13px;color:#64748b}
     @media(max-width:880px){.wrap{grid-template-columns:1fr}}
     /* Popup */
-    #filePopup{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center}
-    #filePopup .inner{background:#fff;padding:20px;border-radius:8px;max-width:90%;max-height:80%;overflow:auto}
+    #filePopup{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:1000}
+    #filePopup .inner{background:#fff;padding:20px;border-radius:8px;max-width:90%;max-height:80%;overflow:auto;position:relative}
     #filePopup h3{margin-top:0}
-    #closePopup{float:right;cursor:pointer;color:#f00}
+    #closePopup{position:absolute;top:10px;right:14px;cursor:pointer;color:#f00;font-size:18px}
+    .fileItem{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #eee}
+    .fileItem button{background:#ef4444;font-size:12px;padding:4px 8px}
   </style>
 </head>
 <body>
@@ -187,7 +189,8 @@
         const storageRef = storage.ref(`rooms/${room}/uploads/${Date.now()}_${file.name}`);
         await storageRef.put(file);
         const url = await storageRef.getDownloadURL();
-        db.ref(`rooms/${room}/files`).push({ name:file.name, url, by:userName, ts:Date.now() });
+        const fileData = { name:file.name, url, by:userName, uid:userId, ts:Date.now() };
+        db.ref(`rooms/${room}/files`).push(fileData);
         db.ref(`rooms/${room}/chat`).push({
           name:userName, text:`📎 <a href="${url}" target="_blank">${file.name}</a>`, ts:Date.now()
         });
@@ -202,14 +205,27 @@
         document.getElementById("filePopup").style.display = "none";
       };
 
-      // File list
+      // File list with delete
       db.ref(`rooms/${room}/files`).on("value", snap => {
         const fileList = document.getElementById("fileList");
         fileList.innerHTML = "";
         snap.forEach(c => {
           const f = c.val();
+          const key = c.key;
           const div = document.createElement("div");
+          div.className = "fileItem";
           div.innerHTML = `📎 <a href="${f.url}" target="_blank">${f.name}</a> <small>(${f.by})</small>`;
+          // Allow delete if file was uploaded by this user
+          if (f.uid === userId) {
+            const delBtn = document.createElement("button");
+            delBtn.textContent = "Delete";
+            delBtn.onclick = async () => {
+              if (!confirm("Delete this file?")) return;
+              await storage.refFromURL(f.url).delete().catch(()=>{});
+              db.ref(`rooms/${room}/files/${key}`).remove();
+            };
+            div.appendChild(delBtn);
+          }
           fileList.appendChild(div);
         });
       });
@@ -257,4 +273,4 @@
     }
   </script>
 </body>
-</html>Built with Firebase Realtime Database + Storage + Quill
+</html>
